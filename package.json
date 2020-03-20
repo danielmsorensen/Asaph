@@ -6,6 +6,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielmsorensen/Asaph.git"
+  },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/danielmsorensen/Asaph/issues"
+  },
+  "homepage": "https://github.com/danielmsorensen/Asaph#readme"
 }
