@@ -1,6 +1,7 @@
 const express = require("express");
 const io = require("socket.io");
 const https = require("https");
+const turn = require("node-turn");
 const path = require("path");
 const fs = require("fs");
 
@@ -21,6 +22,12 @@ class Server {
 		this.app = express();
 		this.server = https.createServer(options, this.app);
 		this.socket = io(this.server);
+		this.turn = new turn({
+			authMech: "long-term",
+			credentials: {
+				"psalms": "50/73-83"
+			}
+		});
 		
 		this.app.use(express.static(path.join(__dirname, "../public")));
 		
@@ -79,7 +86,11 @@ class Server {
 								reason: ""
 							});
 							
-							console.log(socket.id + " (" + data.displayName + ") joined '" + data.sessionName + "'");
+							if(this.activeSockets[socket.id].session.video) {
+								socket.emit("start-video");
+							}
+							
+							console.log(this.activeSockets[socket.id].session.log(socket.id) + " joined");
 						}
 						else {
 							socket.emit("join-session-res", {
@@ -103,57 +114,68 @@ class Server {
 				}
 			});
 			
+			let leaveSession = () => {
+				if(this.activeSockets[socket.id].session) {
+					console.log(this.activeSockets[socket.id].session.log(socket.id) + " left");
+					this.activeSockets[socket.id].session.removeUser(socket);
+					if(Object.keys(this.activeSockets[socket.id].session.users).length === 0) {
+						console.log("'" + this.activeSockets[socket.id].session.name + "' closed");
+						delete this.sessions[this.activeSockets[socket.id].session.name];
+					}
+					this.activeSockets[socket.id].session = null;
+				}
+			}
+			socket.on("leave-session", leaveSession);
+			
 			socket.on("call-user", data => {
-				socket.to(data.to).emit("call-made", {
-					offer: data.offer,
-					socketID: socket.id
-				});
+				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
+					socket.to(data.to).emit("call-made", {
+						offer: data.offer,
+						socketID: socket.id
+					});
+				}
 			});
 			socket.on("make-answer", data => {
-				socket.to(data.to).emit("answer-made", {
-					socketID: socket.id,
-					answer: data.answer
-				});
+				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
+					socket.to(data.to).emit("answer-made", {
+						socketID: socket.id,
+						answer: data.answer
+					});
+				}
 			});
 			
 			socket.on("msg", data => {
-				if(this.activeSockets[socket.id].session) {
+				if(this.activeSockets[socket.id].session && data.msg) {
 					this.activeSockets[socket.id].session.sendMsg(socket, data.msg);
 					socket.emit("msg-res", {
 						success: true,
 						reason: data
 					});
 					
-					console.log("'" + this.activeSockets[socket.id].session.name + "': " + socket.id + " (" + this.activeSockets[socket.id].session.users[socket.id].displayName + ") msg '" + data.msg + "'");
+					console.log(this.activeSockets[socket.id].session.log(socket.id) + " msg '" + data.msg + "'");
 				}
 			});
 			
 			socket.on("video", data => {
 				if(this.activeSockets[socket.id].session) {
-					if(this.activeSockets[socket.id].session.users[socket.id].admin) {
-						switch(data.type) {
-							case("normal"):
+					if(true) { //this.activeSockets[socket.id].session.users[socket.id].admin) {
+						switch(data.option) {
+							case("start"):
 								socket.emit("video-res", {
 									success: true,
-									reason: data.type
+									reason: "start"
 								});
 								this.activeSockets[socket.id].session.startVideo(socket);
-								break;
-							case("layer"):
-								socket.emit("video-res", {
-									success: true,
-									reason: data.type
-								});
-								this.activeSockets[socket.id].session.startLayerVideo(socket, data.layers);
 								break;
 							case("stop"):
 								socket.emit("video-res", {
 									success: true,
-									reason: data.type
+									reason: "stop"
 								});
 								this.activeSockets[socket.id].session.stopVideo(socket);
 								break;
 						}
+						console.log(this.activeSockets[socket.id].session.log(socket.id) + " video " + data.option);
 					}
 					else {
 						socket.emit("video-res", {
@@ -166,9 +188,7 @@ class Server {
 			
 			socket.on("disconnect", () => {
 				if(socket.id in this.activeSockets) {
-					if(this.activeSockets[socket.id].session) {
-						this.activeSockets[socket.id].session.removeUser(socket);
-					}
+					leaveSession();
 					delete this.activeSockets[socket.id];
 					
 					console.log(socket.id + " disconnected");
@@ -178,6 +198,7 @@ class Server {
 	}
 	
 	listen(port) {
+		//this.turn.start();
 		this.server.listen(port, "0.0.0.0");
 	}
 }
@@ -188,7 +209,13 @@ class Session {
 		this.password = password;
 		
 		this.users = {};
-		this.video = "";
+		
+		this.video = false;
+		this.layers = {};
+	}
+	
+	log(socketID) {
+		return "'" + this.name + "': " + socketID + " (" + this.users[socketID].displayName + ")";
 	}
 	
 	broadcast(socket, msg, data) {
@@ -237,22 +264,13 @@ class Session {
 	}
 	
 	startVideo(socket) {
-		this.video = "normal";
-		this.broadcast(socket, "start-video", {
-			"type": "normal"
-		});
-	}
-	
-	startLayerVideo(socket, layers) {
-		this.video = "layer";
-		this.broadcast(socket, "start-video", {
-			"type": "layer"
-		});
+		this.video = true;
+		this.broadcast(socket, "start-video");
 	}
 	
 	stopVideo(socket) {
-		this.video = "";
-		this.broadcast(socket, "stop-video", {});
+		this.video = false;
+		this.broadcast(socket, "stop-video");
 	}
 }
 
