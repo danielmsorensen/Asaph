@@ -78,19 +78,34 @@ class Server {
 				if(data.sessionName && data.displayName) {
 					if(data.sessionName in this.sessions) {
 						if(data.sessionPassword === this.sessions[data.sessionName].password) {
-							this.activeSockets[socket.id].session = this.sessions[data.sessionName];
-							
-							this.sessions[data.sessionName].setUser(socket, data.displayName);
-							socket.emit("join-session-res", {
-								success: true,
-								reason: ""
-							});
-							
-							if(this.activeSockets[socket.id].session.video) {
-								socket.emit("start-video");
+							let ok = true;
+							for(let socketID in this.sessions[data.sessionName].users) {
+								if(data.displayName === this.activeSockets[socketID].displayName) {
+									ok = false;
+									break;
+								}
 							}
-							
-							console.log(this.activeSockets[socket.id].session.log(socket.id) + " joined");
+							if(ok) {
+								this.activeSockets[socket.id].session = this.sessions[data.sessionName];
+								
+								this.sessions[data.sessionName].setUser(socket, data.displayName);
+								socket.emit("join-session-res", {
+									success: true,
+									reason: ""
+								});
+								
+								if(this.activeSockets[socket.id].session.video) {
+									socket.emit("start-video");
+								}
+								
+								console.log(this.activeSockets[socket.id].session.log(socket.id) + " joined");
+							}
+							else {
+								socket.emit("join-session-res", {
+									success: false,
+									reason: "taken"
+								});
+							}
 						}
 						else {
 							socket.emit("join-session-res", {
@@ -127,19 +142,11 @@ class Server {
 			}
 			socket.on("leave-session", leaveSession);
 			
-			socket.on("call-user", data => {
-				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
-					socket.to(data.to).emit("call-made", {
-						offer: data.offer,
-						socketID: socket.id
-					});
-				}
-			});
-			socket.on("make-answer", data => {
-				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
-					socket.to(data.to).emit("answer-made", {
-						socketID: socket.id,
-						answer: data.answer
+			socket.on("signal", data => {
+				if(data.to in this.activeSockets && this.activeSockets[data.to].session && this.activeSockets[socket.id].session && this.activeSockets[data.to].session.name === this.activeSockets[socket.id].session.name) {
+					socket.to(data.to).emit("signal", {
+						from: socket.id,
+						signal: data.signal
 					});
 				}
 			});
@@ -186,6 +193,78 @@ class Server {
 				}
 			});
 			
+			socket.on("layers", data => {
+				if(this.activeSockets[socket.id].session) {
+					if(true) { //insert permissions here
+						let layers = this.activeSockets[socket.id].session.layers;
+						let useLayers = this.activeSockets[socket.id].session.useLayers;
+						
+						if(data.layers) {
+							layers = data.layers;
+						}
+						
+						if(typeof data.useLayers !== "undefined") {
+							useLayers = data.useLayers;	
+						}
+
+						if(this.activeSockets[socket.id].session.setLayers(socket, layers, useLayers)) {
+							socket.emit("layers-res", {
+								success: true,
+								reason: data.layers
+							});
+						}
+						else {
+							socket.emit("layers-res", {
+								success: false,
+								reason: "params"
+							});
+						}
+					}
+					else {
+						socket.emit("video-res", {
+							success: false,
+							reason: "permission"
+						});
+					}
+				}
+			});
+			socket.on("sequence", data => {
+				if(this.activeSockets[socket.id].session) {
+					if(true) { //insert permissions here
+						let sequence = this.activeSockets[socket.id].session.sequence;
+						let useSequence = this.activeSockets[socket.id].session.useSequence;
+						
+						if(data.sequence) {
+							sequence = data.sequence;
+						}
+						
+						if(typeof data.useSequence !== "undefined") {
+							useSequence = data.useSequence;	
+						}
+
+						if(this.activeSockets[socket.id].session.setSequence(socket, sequence, useSequence)) {
+							socket.emit("sequence-res", {
+								success: true,
+								reason: data.sequence
+							});
+							console.log(this.activeSockets[socket.id].session.log(socket.id) + " sequence " + data.sequence);
+						}
+						else {
+							socket.emit("sequence-res", {
+								success: false,
+								reason: "params"
+							});
+						}
+					}
+					else {
+						socket.emit("video-res", {
+							success: false,
+							reason: "permission"
+						});
+					}
+				}
+			});
+			
 			socket.on("disconnect", () => {
 				if(socket.id in this.activeSockets) {
 					leaveSession();
@@ -210,8 +289,9 @@ class Session {
 		
 		this.users = {};
 		
-		this.video = false;
-		this.layers = {};
+		this.video = "";
+		this.layers = [];
+		this.sequence = [];
 	}
 	
 	log(socketID) {
@@ -264,13 +344,77 @@ class Session {
 	}
 	
 	startVideo(socket) {
-		this.video = true;
+		this.video = "normal";
 		this.broadcast(socket, "start-video");
 	}
 	
 	stopVideo(socket) {
-		this.video = false;
+		this.video = "";
 		this.broadcast(socket, "stop-video");
+	}
+	
+	setLayers(socket, layers, useLayers) {
+		try {
+			const users = []
+			for(let layer of layers) {
+				if(typeof layer.delay !== "number") {
+					return false;
+				}
+				for(let user of layer.users) {
+					if(users.includes(user)) {
+						return false;
+					}
+					users.push(user);
+				}
+			}
+			
+			if(typeof useLayers !== "boolean") {
+				return false;
+			}
+			
+			this.layers = layers;
+			if(useLayers) {
+				this.video = "layers";
+				this.broadcast("layers", {
+					"layers": layers
+				});
+			}
+			
+			return true;
+		}
+		catch(error) {
+			console.warn(message);
+			return false;
+		}
+	}
+	
+	setSequence(socket, sequence, useSequence) {
+		try {
+			if(!Array.isArray(sequence)) {
+				return false;
+			}
+			
+			if(typeof useSequence !== "boolean") {
+				return false;
+			}
+			
+			this.sequence = sequence;
+			if(useSequence) {
+				this.video = "sequence";
+				this.broadcast(socket, "sequence", {
+					"sequence": sequence
+				});
+			}
+			else {
+				this.video = "normal"
+				this.broadcast(socket, "sequence", {});
+			}
+			return true;
+		}
+		catch(error) {
+			console.warn(error.message);
+			return false;
+		}
 	}
 }
 

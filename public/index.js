@@ -15,7 +15,7 @@ let users = {};
 
 let videoStream = null;
 
-let iceServers = null;
+let config = null;
 
 document.addEventListener("DOMContentLoaded", () => {
 	pages = document.querySelectorAll(".page");
@@ -60,7 +60,10 @@ window.onload = () => {
 		if(xhr.readyState == 4 && xhr.status == 200){
 			let res = JSON.parse(xhr.responseText);
 			if(res.s === "ok") {
-				iceServers = { "iceServers": [ res.v.iceServers ] };
+				config = { 
+					iceServers: [ res.v.iceServers ]/*,
+					sdpSemantics: "unified-plan"*/
+				};
 			}
 		}
 	}
@@ -105,13 +108,20 @@ function joinSession() {
 	socket.emit("join-session", session);
 }
 
-async function startVideo() {
-	session.video = true;
-	addChat("primary", "Starting video");
+async function startVideo(mode) {
+	if(session.video) {
+		stopVideo(true);
+	}
+	
+	session.video = mode;
+	addChat("primary", "Starting " + mode + " video");
 	videos.style.display = "block";
 	window.scrollTo(0, document.body.scrollHeight);
+	
 	try {
-		videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+		if(!videoStream) {
+			videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+		}
 		
 		let cont = document.createElement("div");
 		cont.className = "video";
@@ -139,11 +149,16 @@ async function startVideo() {
 }
 
 function addVideo(socketID) {
-	users[socketID].connection = new RTCPeerConnection(iceServers);
-	
-	for(let track of videoStream.getTracks()) {
-		users[socketID].connection.addTrack(track, videoStream);
-	}
+	users[socketID].peer = new SimplePeer({
+		"initiator": users[socketID].call,
+		"config": config
+	});
+	users[socketID].peer.on("signal", data => {
+		socket.emit("signal", {
+			"to": socketID,
+			"signal": data
+		});
+	});
 	
 	let cont = document.createElement("div");
 	cont.className = "video";
@@ -156,39 +171,52 @@ function addVideo(socketID) {
 	videos.appendChild(cont);
 	
 	users[socketID].video = node;
-	users[socketID].connection.ontrack = ({ streams: [stream] }) => {
-		node.srcObject = stream;
-	};
 	
-	if(users[socketID].call) {
-		callUser(socketID);
+	if(session.video === "normal") {
+		users[socketID].peer.addStream(videoStream);
+		users[socketID].peer.on("stream", stream => {
+			if("srcObject" in users[socketID].video) {
+				users[socketID].video.srcObject = stream;
+			}
+			else {
+				users[socketID].video.src = URL.createObjectURL(stream);
+			}
+		});
 	}
-	if(users[socketID].answer) {
-		makeAnswer(socketID, users[socketID].answer);
+	else if(session.video === "sequence") {
+		addSequenceVideo(socketID);
+	}
+	
+	if(users[socketID].signal) {
+		users[socketID].peer.signal(users[socketID].signal);
+		delete users[socketID].signal;
 	}
 }
 
 function removeVideo(socketID) {
-	users[socketID].connection.ontrack = null;
-	users[socketID].connection.close();
-	users[socketID].connection = null;
-	
-	users[socketID].answer = null;
-	users[socketID].called = false;
-	
-	videos.removeChild(users[socketID].video.parentNode);
-	users[socketID].video = null;
+	if(users[socketID].peer) {
+		users[socketID].peer.destroy();
+		users[socketID].peer = null;
+	}
+		
+	if(users[socketID].video) {
+		videos.removeChild(users[socketID].video.parentNode);
+		users[socketID].video = null;
+	}
 }
 
-function stopVideo() {
-	session.video = false;
-	addChat("primary", "Video stopped");
+function stopVideo(restart) {
+	session.video = "";
+	if(!restart) {
+		addChat("primary", "Video stopped");
+		videos.style.display = "none";
+	}
 	
 	for(let socketID in users) {
 		removeVideo(socketID);
 	}	
 	
-	if(videoStream) {
+	if(videoStream && !restart) {
 		for(let track of videoStream.getTracks()) {
 			track.stop();
 		}
@@ -196,7 +224,6 @@ function stopVideo() {
 	}
 	
 	videos.innerHTML = "";
-	videos.style.display = "none";
 }
 
 function arrangeVideos() {
@@ -208,14 +235,24 @@ function arrangeVideos() {
 	
 	let c = l, r = 1;
 	
-	for(let s of primeFactors(l).concat(primeFactors(l + 1))) {
+	const getFactors = (x) => {
+		let f = [];
+		for(let i = 2; i <= Math.sqrt(x); i++) {
+			if(x % i === 0) {
+				f.push([x / i, i]);
+			}
+		}
+		return f
+	}
+	
+	for(let s of getFactors(l).concat(getFactors(l + 1))) {
 		if(Math.abs(s[0] / s[1] - a) < Math.abs(c / r - a)) {
 			c = s[0];
 			r = s[1];
 		}
 	}
 	
-	if(r = 1) {
+	if(r === 1) {
 		c = l;
 	}
 	
@@ -241,6 +278,123 @@ function arrangeVideos() {
 		v.style.width = v.style.height = s + "px";
 		v.style.top = Math.floor(i / c) * s + vp + "px";
 		v.style.left = i % c * s + hp + "px";
+	}
+}
+
+function setLayers(layers) {
+	if(layers && layers !== []) {
+		session.layers = layers;
+		
+		// add delay
+	}
+	else {
+		for(let socketID in users) {
+			users[socketID].video.muted = false;
+			
+			// set delay to 0
+		}
+	}
+}
+
+async function setSequence(sequence) {
+	if(sequence && sequence !== []) {		
+		session.sequence = sequence;
+		await startVideo("sequence");
+	}
+	else {		
+		await startVideo("normal");
+	}
+}
+
+function addSequenceVideo(socketID) {
+	const index = s => {
+		let sequence = [];
+		for(let socketID of session.sequence) {
+			if(socketID === socket.id || socketID in users) {
+				sequence.push(socketID);
+			}
+		}
+		let i = sequence.indexOf(s);
+		if(i === -1) {
+			i = sequence.length;
+		}
+		return i;
+	}
+	const i = index(socket.id);
+	const j = index(socketID);
+	
+	if(i === j + 1) {
+		users[socketID].streamIndex = 0;
+		users[socketID].peer.on("stream", stream => {
+			const v = users[session.sequence[users[socketID].streamIndex]].video;
+			if("srcObject" in v) {
+				v.srcObject = stream;
+			}
+			else {
+				v.src = URL.createObjectURL(stream);
+			}
+			users[socketID].streamIndex += 1;
+			
+			for(let u in users) {
+				if(i === index(u) - 1) {
+					users[u].peer.addStream(stream);
+					if(users[socketID].streamIndex >= i) {
+						users[u].peer.addStream(videoStream);
+					}
+				}
+			}
+			
+			/*const tracks = stream.getTracks();
+			const a = [];
+			const v = [];
+			console.log("Receiving");
+			for(let i = 0; i < tracks.length; i++) {
+				console.log(tracks[i]);
+				if(tracks[i].kind === "audio") {
+					a.push(tracks[i]);
+				}
+				else if(tracks[i].kind === "video") {
+					v.push(tracks[i]);
+				}
+			}
+			for(let i = 0; i < a.length; i++) {
+				const mediaStream = new MediaStream();
+				mediaStream.addTrack(a[i]);
+				mediaStream.addTrack(v[i]);
+				users[session.sequence[i]].video.srcObject = mediaStream;
+			}
+			console.log("Sending")
+			if(i < session.sequence.length) {
+				const mediaStream = new MediaStream();
+				for(let track of tracks.concat(videoStream.getTracks())) {
+					console.log(track);
+					mediaStream.addTrack(track);
+				}
+				
+				for(let s in users) {
+					if(i === index(s) - 1) {
+						users[s].peer.addStream(mediaStream);
+					}
+				}
+			}*/
+		});
+		users[socketID].peer.addStream(videoStream);
+	}
+	else {
+		if((i === 0 && j === 1) || i >= j) {
+			users[socketID].peer.addStream(videoStream);
+		}
+		if(i <= j) {
+			users[socketID].video.muted = true;
+			users[socketID].peer.on("stream", stream => {
+				if("srcObject" in users[socketID].video) {
+					users[socketID].video.srcObject = stream;
+				}
+				else {
+					users[socketID].video.src = URL.createObjectURL(stream);
+				}
+			});
+		}
 	}
 }
 
@@ -274,6 +428,32 @@ function sendMsg() {
 						addChat("warn", "Video command syntax incorrect");
 					}
 					break;
+				case("sequence"):
+					if(parts.length > 1) {
+						const sequence = [];
+						for(let part of parts.slice(1)) {
+							if(part === session.displayName) {
+								sequence.push(socket.id);
+							}
+							else {
+								for(let socketID in users) {
+									if(part === users[socketID].displayName) {
+										sequence.push(socketID);
+									}
+								}
+							}
+						}
+						socket.emit("sequence", {
+							"sequence": sequence,
+							"useSequence": true
+						});
+					}
+					else {
+						socket.emit("sequence", {
+							"useSequence": false
+						});
+					}
+					break;
 				default:
 					addChat("warn", "Unknown command");
 					break;
@@ -289,6 +469,8 @@ function sendMsg() {
 }
 
 function addChat(type, msg, header) {
+	let bottom = window.innerHeight + window.scrollY >= document.body.scrollHeight;
+	
 	let node = document.createElement("div");
 	switch(type) {
 		case("chat"):
@@ -315,6 +497,10 @@ function addChat(type, msg, header) {
 			break;
 	}
 	chats.appendChild(node);
+	
+	if(bottom) {
+		window.scrollTo(0, document.body.scrollHeight);
+	}
 }
 
 function joinedSession() {
@@ -339,27 +525,6 @@ function leaveSession() {
 	showPage(0);
 }
 
-async function callUser(socketID) {
-	const offer = await users[socketID].connection.createOffer();
-	await users[socketID].connection.setLocalDescription(new RTCSessionDescription(offer));
-	
-	socket.emit("call-user", {
-		"to": socketID,
-		"offer": offer
-	});
-}
-async function makeAnswer(socketID, offer) {
-	await users[socketID].connection.setRemoteDescription(new RTCSessionDescription(offer));
-	const answer = await users[socketID].connection.createAnswer();
-	await users[socketID].connection.setLocalDescription(new RTCSessionDescription(answer));
-	
-	socket.emit("make-answer", {
-		"to": socketID,
-		"answer": answer
-	});
-}
-
-const { RTCPeerConnection, RTCSessionDescription } = window;
 const socket = io.connect(window.location.origin);
 
 socket.on("join-session-res", data => {
@@ -376,6 +541,9 @@ socket.on("join-session-res", data => {
 				break;
 			case("password"):
 				alert("The session password is incorrect");
+				break;
+			case("taken"):
+				alert("That display name is already taken");
 				break;
 		}
 	}
@@ -402,8 +570,13 @@ socket.on("add-user", data => {
 	else {
 		addChat("info", data.displayName + " has joined the session");
 		if(session.video) {
-			addVideo(data.socketID);
-			arrangeVideos();
+			if(session.video === "normal") {
+				addVideo(data.socketID);
+				arrangeVideos();
+			}
+			else if(session.video === "sequence") {
+				setSequence(session.sequence);
+			}
 		}
 	}
 });
@@ -414,27 +587,27 @@ socket.on("change-name", data => {
 socket.on("remove-user", data => {
 	if(data.socketID in users) {
 		if(session.video) {
-			removeVideo(data.socketID);
-			arrangeVideos();
+			if(session.video === "normal") {
+				removeVideo(data.socketID);
+				arrangeVideos();
+			}
+			else if(session.video === "sequence") {
+				setSequence(session.sequence);
+			}
 		}
 		delete users[data.socketID];
 	}
 	addChat("info", data.displayName + " has left the session");
 });
 
-socket.on("call-made", async data => {
-	if(users[data.socketID].connection) {
-		makeAnswer(data.socketID, data.offer);
-	}
-	else {
-		users[data.socketID].answer = data.offer;
-	}
-});
-socket.on("answer-made", async data => {
-	await users[data.socketID].connection.setRemoteDescription(new RTCSessionDescription(data.answer));
-	if(!users[data.socketID].called) {
-		callUser(data.socketID);
-		users[data.socketID].called = true;
+socket.on("signal", data => {
+	if(data.from in users) {
+		if(users[data.from].peer) {
+			users[data.from].peer.signal(data.signal);
+		}
+		else {
+			users[data.from].signal = data.signal;
+		}
 	}
 });
 
@@ -451,7 +624,7 @@ socket.on("video-res", async data => {
 	if(data.success) {
 		switch(data.reason) {
 			case("start"):
-				await startVideo();
+				await startVideo("normal");
 				break;
 			case("stop"):
 				stopVideo();
@@ -467,8 +640,46 @@ socket.on("video-res", async data => {
 	}
 });
 socket.on("start-video", async () => {
-	await startVideo();
+	await startVideo("normal");
 });
 socket.on("stop-video", () => {
 	stopVideo();
+});
+
+socket.on("layers-res", data => {
+	if(data.success) {
+		setLayers(data.reason);
+	}
+	else {
+		switch(data.reason) {
+			case("permission"):
+				addChat("You do not have permission to set layers");
+				break;
+			case("params"):
+				addChat("warn", "Invalid params for setting layers");
+				break;
+		}
+	}
+});
+socket.on("layers", data => {
+	setLayers(data.layers);
+});
+
+socket.on("sequence-res", async data => {
+	if(data.success) {
+		await setSequence(data.reason);
+	}
+	else {
+		switch(data.reason) {
+			case("permission"):
+				addChat("You do not have permission to set sequence");
+				break;
+			case("params"):
+				addChat("warn", "Invalid params for setting sequence");
+				break;
+		}
+	}
+});
+socket.on("sequence", async data => {
+	await setSequence(data.sequence);
 });
