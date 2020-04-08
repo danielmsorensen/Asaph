@@ -14,6 +14,7 @@ let session = {};
 let users = {};
 
 let videoStream = null;
+let mediaRecorder = null;
 
 let iceServers = null;
 
@@ -54,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		}
 	};
 });
+<<<<<<< Updated upstream
 window.onload = () => {
 	let xhr = new XMLHttpRequest();
 	xhr.onreadystatechange = function($evt){
@@ -69,6 +71,8 @@ window.onload = () => {
 	xhr.setRequestHeader ("Content-Type", "application/json");
 	xhr.send(JSON.stringify({"format": "urls"}) );
 }
+=======
+>>>>>>> Stashed changes
 
 function showPage(pageIndex) {
 	activePage = pageIndex;
@@ -111,7 +115,25 @@ async function startVideo() {
 	videos.style.display = "block";
 	window.scrollTo(0, document.body.scrollHeight);
 	try {
+<<<<<<< Updated upstream
 		videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+=======
+		if(!videoStream) {
+			videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+			mediaRecorder = new MediaRecorder(videoStream, {
+				"mimeType": "video/webm; codecs=\"opus,vp8\""
+			});
+			mediaRecorder.ondataavailable = (event) => {
+				if(event.data.size > 0) {
+					socket.emit("stream-video", {
+						"timecode": event.timecode,
+						"chunk": event.data
+					});
+				}
+			};
+			mediaRecorder.start(10);
+		}
+>>>>>>> Stashed changes
 		
 		let cont = document.createElement("div");
 		cont.className = "video";
@@ -139,12 +161,15 @@ async function startVideo() {
 }
 
 function addVideo(socketID) {
+<<<<<<< Updated upstream
 	users[socketID].connection = new RTCPeerConnection(iceServers);
 	
 	for(let track of videoStream.getTracks()) {
 		users[socketID].connection.addTrack(track, videoStream);
 	}
 	
+=======
+>>>>>>> Stashed changes
 	let cont = document.createElement("div");
 	cont.className = "video";
 	
@@ -152,10 +177,17 @@ function addVideo(socketID) {
 	node.id = socketID;
 	node.autoplay = true;
 	
+	users[socketID].src = new MediaSource();
+	node.src = URL.createObjectURL(users[socketID].src);
+	users[socketID].src.addEventListener("sourceopen", event => {
+		users[socketID].buffer = users[socketID].src.addSourceBuffer("video/webm; codecs=\"opus,vp8\"");
+	});
+	
 	cont.appendChild(node);
 	videos.appendChild(cont);
 	
 	users[socketID].video = node;
+<<<<<<< Updated upstream
 	users[socketID].connection.ontrack = ({ streams: [stream] }) => {
 		node.srcObject = stream;
 	};
@@ -178,6 +210,17 @@ function removeVideo(socketID) {
 	
 	videos.removeChild(users[socketID].video.parentNode);
 	users[socketID].video = null;
+=======
+}
+
+function removeVideo(socketID) {		
+	if(users[socketID].video) {
+		videos.removeChild(users[socketID].video.parentNode);
+		users[socketID].video = null;
+		users[socketID].src = null;
+		users[socketID].buffer = null;
+	}
+>>>>>>> Stashed changes
 }
 
 function stopVideo() {
@@ -188,7 +231,15 @@ function stopVideo() {
 		removeVideo(socketID);
 	}	
 	
+<<<<<<< Updated upstream
 	if(videoStream) {
+=======
+	if(videoStream && !restart) {
+		mediaRecorder.stop();
+		mediaRecorder.ondataavailable = null;
+		mediaRecorder = null;
+		
+>>>>>>> Stashed changes
 		for(let track of videoStream.getTracks()) {
 			track.stop();
 		}
@@ -339,6 +390,7 @@ function leaveSession() {
 	showPage(0);
 }
 
+<<<<<<< Updated upstream
 async function callUser(socketID) {
 	const offer = await users[socketID].connection.createOffer();
 	await users[socketID].connection.setLocalDescription(new RTCSessionDescription(offer));
@@ -359,6 +411,8 @@ async function makeAnswer(socketID, offer) {
 	});
 }
 
+=======
+>>>>>>> Stashed changes
 const { RTCPeerConnection, RTCSessionDescription } = window;
 const socket = io.connect(window.location.origin);
 
@@ -397,13 +451,19 @@ socket.on("add-user", data => {
 	users[data.socketID] = data;
 	if(session.status === "joining") {
 		addChat("info", data.displayName + " is in the session");
-		users[data.socketID].call = true;
 	}
 	else {
 		addChat("info", data.displayName + " has joined the session");
 		if(session.video) {
+<<<<<<< Updated upstream
 			addVideo(data.socketID);
 			arrangeVideos();
+=======
+			if(session.video === "normal") {
+				addVideo(data.socketID);
+				arrangeVideos();
+			}
+>>>>>>> Stashed changes
 		}
 	}
 });
@@ -414,14 +474,22 @@ socket.on("change-name", data => {
 socket.on("remove-user", data => {
 	if(data.socketID in users) {
 		if(session.video) {
+<<<<<<< Updated upstream
 			removeVideo(data.socketID);
 			arrangeVideos();
+=======
+			if(session.video === "normal") {
+				removeVideo(data.socketID);
+				arrangeVideos();
+			}
+>>>>>>> Stashed changes
 		}
 		delete users[data.socketID];
 	}
 	addChat("info", data.displayName + " has left the session");
 });
 
+<<<<<<< Updated upstream
 socket.on("call-made", async data => {
 	if(users[data.socketID].connection) {
 		makeAnswer(data.socketID, data.offer);
@@ -438,6 +506,8 @@ socket.on("answer-made", async data => {
 	}
 });
 
+=======
+>>>>>>> Stashed changes
 socket.on("msg-res", data => {
 	if(data.success) {
 		addChat("chat", data.reason.msg, "You");
@@ -471,4 +541,14 @@ socket.on("start-video", async () => {
 });
 socket.on("stop-video", () => {
 	stopVideo();
+<<<<<<< Updated upstream
+=======
+});
+socket.on("video-stream", data => {
+	if(data.from in users) {
+		if(users[data.from].buffer && !users[data.from].buffer.updating) {
+			users[data.from].buffer.appendBuffer(data.chunk);
+		}
+	}
+>>>>>>> Stashed changes
 });

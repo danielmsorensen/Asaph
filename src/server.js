@@ -127,6 +127,7 @@ class Server {
 			}
 			socket.on("leave-session", leaveSession);
 			
+<<<<<<< Updated upstream
 			socket.on("call-user", data => {
 				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
 					socket.to(data.to).emit("call-made", {
@@ -144,6 +145,8 @@ class Server {
 				}
 			});
 			
+=======
+>>>>>>> Stashed changes
 			socket.on("msg", data => {
 				if(this.activeSockets[socket.id].session && data.msg) {
 					this.activeSockets[socket.id].session.sendMsg(socket, data.msg);
@@ -183,6 +186,15 @@ class Server {
 							reason: "permission"
 						});
 					}
+				}
+			});
+			socket.on("stream-video", data => {
+				if(this.activeSockets[socket.id].session) {
+					this.activeSockets[socket.id].session.broadcast(socket, "video-stream", {
+						timecode: data.timecode,
+						chunk: data.chunk,
+						from: socket.id
+					});
 				}
 			});
 			
