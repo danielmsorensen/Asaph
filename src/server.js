@@ -127,26 +127,6 @@ class Server {
 			}
 			socket.on("leave-session", leaveSession);
 			
-<<<<<<< Updated upstream
-			socket.on("call-user", data => {
-				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
-					socket.to(data.to).emit("call-made", {
-						offer: data.offer,
-						socketID: socket.id
-					});
-				}
-			});
-			socket.on("make-answer", data => {
-				if(data.to in this.activeSockets && socket.id in this.activeSockets && this.activeSockets[socket.id].session && this.activeSockets[socket.id].session.name === this.activeSockets[data.to].session.name) {
-					socket.to(data.to).emit("answer-made", {
-						socketID: socket.id,
-						answer: data.answer
-					});
-				}
-			});
-			
-=======
->>>>>>> Stashed changes
 			socket.on("msg", data => {
 				if(this.activeSockets[socket.id].session && data.msg) {
 					this.activeSockets[socket.id].session.sendMsg(socket, data.msg);

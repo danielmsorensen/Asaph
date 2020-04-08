@@ -55,24 +55,6 @@ document.addEventListener("DOMContentLoaded", () => {
 		}
 	};
 });
-<<<<<<< Updated upstream
-window.onload = () => {
-	let xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function($evt){
-		if(xhr.readyState == 4 && xhr.status == 200){
-			let res = JSON.parse(xhr.responseText);
-			if(res.s === "ok") {
-				iceServers = { "iceServers": [ res.v.iceServers ] };
-			}
-		}
-	}
-	xhr.open("PUT", "https://global.xirsys.net/_turn/Asaph", true);
-	xhr.setRequestHeader ("Authorization", "Basic " + btoa("danielmsorensen:bef556e0-7463-11ea-8996-0242ac110004") );
-	xhr.setRequestHeader ("Content-Type", "application/json");
-	xhr.send(JSON.stringify({"format": "urls"}) );
-}
-=======
->>>>>>> Stashed changes
 
 function showPage(pageIndex) {
 	activePage = pageIndex;
@@ -115,9 +97,6 @@ async function startVideo() {
 	videos.style.display = "block";
 	window.scrollTo(0, document.body.scrollHeight);
 	try {
-<<<<<<< Updated upstream
-		videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-=======
 		if(!videoStream) {
 			videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			mediaRecorder = new MediaRecorder(videoStream, {
@@ -133,7 +112,6 @@ async function startVideo() {
 			};
 			mediaRecorder.start(10);
 		}
->>>>>>> Stashed changes
 		
 		let cont = document.createElement("div");
 		cont.className = "video";
@@ -161,15 +139,6 @@ async function startVideo() {
 }
 
 function addVideo(socketID) {
-<<<<<<< Updated upstream
-	users[socketID].connection = new RTCPeerConnection(iceServers);
-	
-	for(let track of videoStream.getTracks()) {
-		users[socketID].connection.addTrack(track, videoStream);
-	}
-	
-=======
->>>>>>> Stashed changes
 	let cont = document.createElement("div");
 	cont.className = "video";
 	
@@ -187,17 +156,6 @@ function addVideo(socketID) {
 	videos.appendChild(cont);
 	
 	users[socketID].video = node;
-<<<<<<< Updated upstream
-	users[socketID].connection.ontrack = ({ streams: [stream] }) => {
-		node.srcObject = stream;
-	};
-	
-	if(users[socketID].call) {
-		callUser(socketID);
-	}
-	if(users[socketID].answer) {
-		makeAnswer(socketID, users[socketID].answer);
-	}
 }
 
 function removeVideo(socketID) {
@@ -210,7 +168,6 @@ function removeVideo(socketID) {
 	
 	videos.removeChild(users[socketID].video.parentNode);
 	users[socketID].video = null;
-=======
 }
 
 function removeVideo(socketID) {		
@@ -220,7 +177,6 @@ function removeVideo(socketID) {
 		users[socketID].src = null;
 		users[socketID].buffer = null;
 	}
->>>>>>> Stashed changes
 }
 
 function stopVideo() {
@@ -231,15 +187,11 @@ function stopVideo() {
 		removeVideo(socketID);
 	}	
 	
-<<<<<<< Updated upstream
 	if(videoStream) {
-=======
-	if(videoStream && !restart) {
 		mediaRecorder.stop();
 		mediaRecorder.ondataavailable = null;
 		mediaRecorder = null;
 		
->>>>>>> Stashed changes
 		for(let track of videoStream.getTracks()) {
 			track.stop();
 		}
@@ -390,30 +342,6 @@ function leaveSession() {
 	showPage(0);
 }
 
-<<<<<<< Updated upstream
-async function callUser(socketID) {
-	const offer = await users[socketID].connection.createOffer();
-	await users[socketID].connection.setLocalDescription(new RTCSessionDescription(offer));
-	
-	socket.emit("call-user", {
-		"to": socketID,
-		"offer": offer
-	});
-}
-async function makeAnswer(socketID, offer) {
-	await users[socketID].connection.setRemoteDescription(new RTCSessionDescription(offer));
-	const answer = await users[socketID].connection.createAnswer();
-	await users[socketID].connection.setLocalDescription(new RTCSessionDescription(answer));
-	
-	socket.emit("make-answer", {
-		"to": socketID,
-		"answer": answer
-	});
-}
-
-=======
->>>>>>> Stashed changes
-const { RTCPeerConnection, RTCSessionDescription } = window;
 const socket = io.connect(window.location.origin);
 
 socket.on("join-session-res", data => {
@@ -455,15 +383,8 @@ socket.on("add-user", data => {
 	else {
 		addChat("info", data.displayName + " has joined the session");
 		if(session.video) {
-<<<<<<< Updated upstream
 			addVideo(data.socketID);
 			arrangeVideos();
-=======
-			if(session.video === "normal") {
-				addVideo(data.socketID);
-				arrangeVideos();
-			}
->>>>>>> Stashed changes
 		}
 	}
 });
@@ -474,40 +395,14 @@ socket.on("change-name", data => {
 socket.on("remove-user", data => {
 	if(data.socketID in users) {
 		if(session.video) {
-<<<<<<< Updated upstream
 			removeVideo(data.socketID);
 			arrangeVideos();
-=======
-			if(session.video === "normal") {
-				removeVideo(data.socketID);
-				arrangeVideos();
-			}
->>>>>>> Stashed changes
 		}
 		delete users[data.socketID];
 	}
 	addChat("info", data.displayName + " has left the session");
 });
 
-<<<<<<< Updated upstream
-socket.on("call-made", async data => {
-	if(users[data.socketID].connection) {
-		makeAnswer(data.socketID, data.offer);
-	}
-	else {
-		users[data.socketID].answer = data.offer;
-	}
-});
-socket.on("answer-made", async data => {
-	await users[data.socketID].connection.setRemoteDescription(new RTCSessionDescription(data.answer));
-	if(!users[data.socketID].called) {
-		callUser(data.socketID);
-		users[data.socketID].called = true;
-	}
-});
-
-=======
->>>>>>> Stashed changes
 socket.on("msg-res", data => {
 	if(data.success) {
 		addChat("chat", data.reason.msg, "You");
@@ -541,8 +436,6 @@ socket.on("start-video", async () => {
 });
 socket.on("stop-video", () => {
 	stopVideo();
-<<<<<<< Updated upstream
-=======
 });
 socket.on("video-stream", data => {
 	if(data.from in users) {
@@ -550,5 +443,4 @@ socket.on("video-stream", data => {
 			users[data.from].buffer.appendBuffer(data.chunk);
 		}
 	}
->>>>>>> Stashed changes
 });
