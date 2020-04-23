@@ -9,7 +9,10 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 		
+		<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+		
 		<script src="https://cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js"></script>
+		<script src="scripts/simplepeer.min.js"></script>
 		
 		<link rel="stylesheet" href="index.css" />
 		<script type="module" src="scripts/index.js"></script>
@@ -18,52 +21,68 @@
 		<title>Asaph</title>
 	</head>
 	<body>
+		<div class="modal fade" id="modal">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">Title</h4>
+						<button type="button" class="close" data-dismiss="modal">&times;</button>
+					</div>
+					<div class="modal-body">
+						Body
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
 		<div class="container-fluid" id="outer">
-			<div class="container bg-light border" id="inner">
+			<div class="container bg-light rounded p-2" id="inner">
 				<div id="page_signin">
 					<h1 class="text-center">Asaph</h1>
 					<div class="row">
-						<div class="col-sm-6 p-0">
-							<button class="btn btn-primary btn-block btn-lg border rounded-0" type="button" onclick="showLogin()">Login</button>
+						<div class="col-sm-6 mb-sm-0 mb-2 pr-sm-1">
+							<button class="btn btn-primary btn-block btn-lg" type="button" onclick="showLogin()">Login</button>
 						</div>
-						<div class="col-sm-6 p-0">
-							<button class="btn btn-primary btn-block btn-lg border rounded-0" type="button" onclick="showCreate()">Create Account</button>
+						<div class="col-sm-6 pl-sm-1">
+							<button class="btn btn-primary btn-block btn-lg" type="button" onclick="showCreate()">Create Account</button>
 						</div>
 					</div>
-					<div class="collapse border m-2 p-2" id="signin">
-						<form id="login-form">
+					<div class="collapse border mt-2 p-2" id="signin">
+						<form id="signin_login-form">
 							<div class="form-group">
-								<label for="login_email">Email:</label>
-								<input class="form-control" type="email" id="login_email" />
+								<label for="signin_login_email">Email:</label>
+								<input class="form-control" type="email" id="signin_login_email" />
 							</div>
 							<div class="form-group">
-								<label for="login_pw">Password:</label>
-								<input class="form-control" type="password" id="login_pw" />
+								<label for="signin_login_pw">Password:</label>
+								<input class="form-control" type="password" id="signin_login_pw" />
 							</div>
 							<button class="btn btn-secondary" type="button" onclick="login()">Login</button>
 						</form>
-						<form id="create-form">
-						<div class="form-group">
-							<label for="create_name">Name:</label>
-								<input class="form-control" type="text" id="create_name" />
+						<form id="signin_create-form">
+							<div class="form-group">
+								<label for="signin_create_name">Name:</label>
+								<input class="form-control" type="text" id="signin_create_name" />
 							</div>
 							<hr />
 							<div class="form-group">
-								<label for="create_email">Email:</label>
-								<input class="form-control" type="email" id="create_email" />
+								<label for="signin_create_email">Email:</label>
+								<input class="form-control" type="email" id="signin_create_email" />
 							</div>
 							<div class="form-group">
-								<label for="create_conf_email">Confirm Email:</label>
-								<input class="form-control" type="email" id="create_conf_email" />
+								<label for="signin_create_conf_email">Confirm Email:</label>
+								<input class="form-control" type="email" id="signin_create_conf_email" />
 							</div>
 							<hr />
 							<div class="form-group">
-								<label for="create_pw">Password:</label>
-								<input class="form-control" type="password" id="create_pw" />
+								<label for="signin_create_pw">Password:</label>
+								<input class="form-control" type="password" id="signin_create_pw" />
 							</div>
 							<div class="form-group">
-								<label for="create_conf_pw">Confirm Password:</label>
-								<input class="form-control" type="password" id="create_conf_pw" />
+								<label for="signin_create_conf_pw">Confirm Password:</label>
+								<input class="form-control" type="password" id="signin_create_conf_pw" />
 							</div>
 							<button class="btn btn-secondary" type="button" onclick="createAccount()">Create Account</button>
 						</form>
@@ -71,7 +90,7 @@
 					</div>
 				</div>
 				<div id="page_home" style="display: none">
-					<div class="row my-1">
+					<div class="row">
 						<div class="col-sm-4"></div>
 						<div class="col-sm-4">
 							<h1 class="text-center">Asaph</h1>
@@ -86,15 +105,74 @@
 							</div>
 						</div>
 					</div>
-					<button class="btn btn-primary btn-block btn-lg mb-1" type="button" data-target="#home_join" data-toggle="collapse">Join Session</button>
-					<div class="collapse" id="home_join" data-parent="#page_home">
-						Join
+					<button class="btn btn-primary btn-block btn-lg mt-2" type="button" data-target="#home_join" data-toggle="collapse">Join New Session</button>
+					<div class="collapse border mt-2 p-2" id="home_join" data-parent="#page_home">
+						<form id="home_join-form">
+							<div class="form-group">
+								<label for="home_join_sid">Session ID:</label>
+								<input class="form-control" type="text" id="home_join_sid" required />
+							</div>
+							<div class="form-group">
+								<label for="home_join_pw">Session Password:</label>
+								<input class="form-control" type="text" id="home_join_pw" required />
+							</div>
+							<div class="custom-control custom-checkbox mb-3">
+								<input class="custom-control-input" type="checkbox" id="home_join_save" checked />
+								<label class="custom-control-label" for="home_join_save">Save</label>
+							</div>
+							<button class="btn btn-secondary" type="button" onclick="joinSession()">Join Session</button>
+						</form>
 					</div>
-					<button class="btn btn-primary btn-block btn-lg my-1" type="button" data-target="#home_create" data-toggle="collapse">Create Session</button>
-					<div class="collapse" id="home_create" data-parent="#page_home">
-						Create
+					<button class="btn btn-primary btn-block btn-lg mt-2" type="button" data-target="#home_create" data-toggle="collapse">Create Session</button>
+					<div class="collapse border mt-2 p-2" id="home_create" data-parent="#page_home">
+						<form id="home_create-form">
+							<div class="form-group">
+								<label for="home_create_name">Session Name:</label>
+								<input class="form-control" type="text" id="home_create_name" required />
+							</div>
+							<div class="form-group">
+								<label for="home_create_pw">Session Password:</label>
+								<input class="form-control" type="text" id="home_create_pw" required />
+							</div>
+							<button class="btn btn-secondary" type="button" onclick="createSession()">Create Session</button>
+						</form>
+					</div>
+					<button class="btn btn-primary btn-block btn-lg mt-2" type="button" data-target="#home_my" data-toggle="collapse">My Sessions</button>
+					<div class="collapse border mt-2 p-2 show" id="home_my" data-parent="#page_home">
+						<table class="table table-hover" id="home_join-table">
+							<thead class="thead-light">
+								<tr>
+									<th>Session Name</th>
+									<th>Session ID</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody></tbody>
+						</table>
 					</div>
 				</div>
+			</div>
+			<div class="w-100 h-100" id="page_video" style="display: none">
+				<nav class="navbar navbar-expand-sm bg-light navbar-light">
+					<span class="navbar-brand">Asaph</span>
+					<span class="navbar-text" id="video_session-name">Session Name</span>
+					<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#collapsibleNavbar">
+						<span class="navbar-toggler-icon" />
+					</button>
+					<div class="collapse navbar-collapse" id="collapsibleNavbar">
+						<ul class="navbar-nav flex-grow-1">
+							<li class="nav-item">
+								<a class="nav-link text-info fa" href="javascript:sessionInfo()">&#xf05a;</a>
+							</li>
+						</ul>
+						<ul class="navbar-nav">
+							<li class="nav-item">
+								<a class="nav-link text-danger" href="javascript:leaveSession()">Leave Session</a>
+							</li>
+						</ul>
+					</div>  
+				</nav>
+				<div id="videos"></div>
 			</div>
 		</div>
 	</body>

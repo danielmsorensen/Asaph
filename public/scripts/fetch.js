@@ -29,25 +29,25 @@ async function request(method, url, params) {
 	try {
 		let init, q;
 		switch(method) {
-		case "GET":
-			init = {
-				method: "GET"
-			};
-			q = new URLSearchParams();
-			for(const key in params) {
-				q.set(key, params[key]);
-			}
-			url += (url.endsWith("/") ? "" : "/") + "?" + q.toString();
-			break;
-		case "POST":
-			init = {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(params)
-			};
-			break;
+			case "GET":
+				init = {
+					method: "GET"
+				};
+				q = new URLSearchParams();
+				for(const key in params) {
+					q.set(key, params[key]);
+				}
+				url += (url.endsWith("/") ? "" : "/") + "?" + q.toString();
+				break;
+			case "POST":
+				init = {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(params)
+				};
+				break;
 		}
 		const res = await fetch(url, init);
 		if(res.ok) {

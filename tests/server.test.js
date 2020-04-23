@@ -21,15 +21,15 @@ const server = new Server({
 });
 const app = server.app;
 
-let uid, token;
-describe("Testing web service", () => {
+let uid, token, sid, name, password;
+describe("Web Service", () => {
 	test("GET /index.html", () => {
 		return request(app)
 			.get("/")
 			.expect(200);
 	});
 	
-	describe("Testing signin", () => {
+	describe("account API", () => {
 		test("POST create (valid account)", () => {
 			return request(app)
 				.post("/api/account/create")
@@ -50,6 +50,7 @@ describe("Testing web service", () => {
 				})
 				.expect(409);
 		});
+		
 		test("POST login (wrong email)", () => {
 			return request(app)
 				.post("/api/account/login")
@@ -64,7 +65,7 @@ describe("Testing web service", () => {
 				.post("/api/account/login")
 				.send({
 					email: "a@b.c",
-					password: "1234"
+					password: "456"
 				})
 				.expect(401);
 		});
@@ -82,6 +83,7 @@ describe("Testing web service", () => {
 					token = res.body.token;
 				});
 		});
+		
 		test("GET profile (invalid uid)", () => {
 			return request(app)
 				.get("/api/account/profile")
@@ -89,7 +91,7 @@ describe("Testing web service", () => {
 					uid: "123",
 					token
 				})
-				.expect(404);
+				.expect(401);
 		});
 		test("GET profile (invalid token)", () => {
 			return request(app)
@@ -107,11 +109,311 @@ describe("Testing web service", () => {
 					uid,
 					token
 				})
+				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect(200, {
+				.expect({
 					email: "a@b.c",
-					name: "name"
+					name: "name",
+					sid: ""
 				});
+		});
+	});
+	describe("session API", () => {
+		test("POST create (invalid uid)", () => {
+			return request(app)
+				.post("/api/session/create")
+				.send({
+					name: "name",
+					password: "123",
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("POST create (invalid token)", () => {
+			return request(app)
+				.post("/api/session/create")
+				.send({
+					name: "name",
+					password: "123",
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("POST create (valid access token)", () => {
+			return request(app)
+				.post("/api/session/create")
+				.send({
+					name: "name",
+					password: "123",
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.then(res => {
+					sid = res.body.sid;
+					name = res.body.name;
+					password = res.body.password;
+				});
+		});
+		
+		test("POST join (invalid uid)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid,
+					password,
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("POST join (invalid token)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid,
+					password,
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("POST join (wrong sid)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid: "123",
+					password,
+					uid,
+					token
+				})
+				.expect(404);
+		});
+		test("POST join (wrong spw)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid,
+					password: "456",
+					uid,
+					token
+				})
+				.expect(403);
+		});
+		test("POST join (valid details)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid,
+					password,
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect({
+					sid,
+					name,
+					password,
+					owner: uid
+				});
+		});
+		test("GET profile (valid access token - joined session)", () => {
+			return request(app)
+				.get("/api/account/profile")
+				.query({
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect({
+					email: "a@b.c",
+					name: "name",
+					sid
+				});
+		});
+		
+		test("POST leave (invalid uid)", () => {
+			return request(app)
+				.post("/api/session/leave")
+				.send({
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("POST leave (invalid token)", () => {
+			return request(app)
+				.post("/api/session/leave")
+				.send({
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("POST leave (valid access token)", () => {
+			return request(app)
+				.post("/api/session/leave")
+				.send({
+					uid,
+					token
+				})
+				.expect(200);
+		});
+		test("GET profile (valid access token - left session)", () => {
+			return request(app)
+				.get("/api/account/profile")
+				.query({
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect({
+					email: "a@b.c",
+					name: "name",
+					sid: ""
+				});
+		});
+		
+		test("GET get (invalid uid)", () => {
+			return request(app)
+				.get("/api/session/get")
+				.query({
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("GET get (invalid token)", () => {
+			return request(app)
+				.get("/api/session/get")
+				.query({
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("GET get (valid access token)", () => {
+			return request(app)
+				.get("/api/session/get")
+				.query({
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect([{
+					sid,
+					name,
+					password,
+					owner: uid
+				}]);
+		});
+		
+		test("POST remove (invalid uid)", () => {
+			return request(app)
+				.post("/api/session/remove")
+				.send({
+					sid,
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("POST remove (invalid token)", () => {
+			return request(app)
+				.post("/api/session/remove")
+				.send({
+					sid,
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("POST remove (wrong sid)", () => {
+			return request(app)
+				.post("/api/session/remove")
+				.send({
+					sid: "123",
+					uid,
+					token
+				})
+				.expect(404);
+		});
+		test("POST remove (valid details)", () => {
+			return request(app)
+				.post("/api/session/remove")
+				.send({
+					sid,
+					uid,
+					token
+				})
+				.expect(200);
+		});
+		test("GET get (valid details - removed session)", () => {
+			return request(app)
+				.get("/api/session/get")
+				.query({
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect([]);
+		});
+		test("POST join (valid details - removed session)", () => {
+			return request(app)
+				.post("/api/session/join")
+				.send({
+					sid,
+					password,
+					uid,
+					token
+				})
+				.expect(404);
+		});
+	});
+	describe("signout", () => {
+		test("POST signout (invalid uid)", () => {
+			return request(app)
+				.post("/api/account/signout")
+				.send({
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("POST signout (invalid token)", () => {
+			return request(app)
+				.post("/api/account/signout")
+				.send({
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("POST signout", () => {
+			return request(app)
+				.post("/api/account/signout")
+				.send({
+					uid,
+					token
+				})
+				.expect(200);
+		});
+		test("GET profile (old token)", () => {
+			return request(app)
+				.get("/api/account/profile")
+				.query({
+					uid,
+					token
+				})
+				.expect(401);
 		});
 	});
 });

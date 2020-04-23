@@ -7,7 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js --ignore data/",
     "test": "jest",
-    "pretest": "eslint --ignore-path .gitignore --ext .js,.html ."
+    "pretest": "eslint --ignore-path .gitignore --ext .js,.html --ignore-pattern \"**/*.min.js\" ."
   },
   "repository": {
     "type": "git",
