@@ -1,3 +1,7 @@
+# Asaph
+data/
+tests/data.json
+
 # Logs
 logs
 *.log
