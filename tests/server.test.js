@@ -21,12 +21,14 @@ const server = new Server({
 });
 const app = server.app;
 
-let uid, token, sid, name, password;
+let profile, uid, token;
+let session, sid, password;
 describe("Web Service", () => {
 	test("GET /index.html", () => {
 		return request(app)
 			.get("/")
-			.expect(200);
+			.expect(200)
+			.expect("Content-Type", /html/);
 	});
 	
 	describe("account API", () => {
@@ -111,13 +113,12 @@ describe("Web Service", () => {
 				})
 				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect({
-					email: "a@b.c",
-					name: "name",
-					sid: ""
+				.then(res => {
+					profile = res.body;
 				});
 		});
 	});
+	
 	describe("session API", () => {
 		test("POST create (invalid uid)", () => {
 			return request(app)
@@ -153,9 +154,9 @@ describe("Web Service", () => {
 				.expect(200)
 				.expect("Content-Type", /json/)
 				.then(res => {
-					sid = res.body.sid;
-					name = res.body.name;
-					password = res.body.password;
+					session = res.body;
+					sid = session.sid;
+					password = session.password;
 				});
 		});
 		
@@ -214,12 +215,7 @@ describe("Web Service", () => {
 				})
 				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect({
-					sid,
-					name,
-					password,
-					owner: uid
-				});
+				.expect(session);
 		});
 		test("GET profile (valid access token - joined session)", () => {
 			return request(app)
@@ -230,11 +226,7 @@ describe("Web Service", () => {
 				})
 				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect({
-					email: "a@b.c",
-					name: "name",
-					sid
-				});
+				.expect(Object.fromEntries(Object.entries(profile).concat([["sid", sid]])));
 		});
 		
 		test("POST leave (invalid uid)", () => {
@@ -273,46 +265,37 @@ describe("Web Service", () => {
 				})
 				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect({
-					email: "a@b.c",
-					name: "name",
-					sid: ""
-				});
+				.expect(profile);
 		});
 		
-		test("GET get (invalid uid)", () => {
+		test("GET sessions (invalid uid)", () => {
 			return request(app)
-				.get("/api/session/get")
+				.get("/api/session/sessions")
 				.query({
 					uid: "123",
 					token
 				})
 				.expect(401);
 		});
-		test("GET get (invalid token)", () => {
+		test("GET sessions (invalid token)", () => {
 			return request(app)
-				.get("/api/session/get")
+				.get("/api/session/sessions")
 				.query({
 					uid,
 					token: "123"
 				})
 				.expect(401);
 		});
-		test("GET get (valid access token)", () => {
+		test("GET sessions (valid access token)", () => {
 			return request(app)
-				.get("/api/session/get")
+				.get("/api/session/sessions")
 				.query({
 					uid,
 					token
 				})
 				.expect(200)
 				.expect("Content-Type", /json/)
-				.expect([{
-					sid,
-					name,
-					password,
-					owner: uid
-				}]);
+				.expect([session]);
 		});
 		
 		test("POST remove (invalid uid)", () => {
@@ -355,9 +338,9 @@ describe("Web Service", () => {
 				})
 				.expect(200);
 		});
-		test("GET get (valid details - removed session)", () => {
+		test("GET sessions (valid details - removed session)", () => {
 			return request(app)
-				.get("/api/session/get")
+				.get("/api/session/sessions")
 				.query({
 					uid,
 					token
@@ -378,6 +361,89 @@ describe("Web Service", () => {
 				.expect(404);
 		});
 	});
+	
+	describe("link", () => {
+		test("POST create (create session + link)", () => {
+			return request(app)
+				.post("/api/session/create")
+				.send({
+					name: "name",
+					password: "123",
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.then(res => {
+					session = res.body;
+					sid = session.sid;
+					password = session.password;
+				});
+		});
+		test("GET link (no access token)", () => {
+			return request(app)
+				.get("/link/session/" + session.link)
+				.expect(200)
+				.expect("Content-Type", /html/);
+		});
+		test("GET link (no context)", () => {
+			return request(app)
+				.get("/link")
+				.query({
+					uid,
+					token
+				})
+				.expect(404);
+		});
+		test("GET link (no code)", () => {
+			return request(app)
+				.get("/link/session")
+				.query({
+					uid,
+					token
+				})
+				.expect(404);
+		});
+		test("GET link (invalid code)", () => {
+			return request(app)
+				.get("/link/session/123")
+				.query({
+					uid,
+					token
+				})
+				.expect(404);
+		});
+		test("GET link (invalid uid)", () => {
+			return request(app)
+				.get("/link/session/" + session.link)
+				.query({
+					uid: "123",
+					token
+				})
+				.expect(401);
+		});
+		test("GET link (invalid token)", () => {
+			return request(app)
+				.get("/link/session/" + session.link)
+				.query({
+					uid,
+					token: "123"
+				})
+				.expect(401);
+		});
+		test("GET link (valid details)", () => {
+			return request(app)
+				.get("/link/session/" + session.link)
+				.query({
+					uid,
+					token
+				})
+				.expect(200)
+				.expect("Content-Type", /json/)
+				.expect(session);
+		});
+	});
+	
 	describe("signout", () => {
 		test("POST signout (invalid uid)", () => {
 			return request(app)

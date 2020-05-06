@@ -1,5 +1,7 @@
 import { request } from "./fetch.js";
-import { connect, disconnect, getConfig, arrangeVideos } from "./socket.js";
+import { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices } from "./socket.js";
+
+let user = {};
 
 $(document).ready(() => {
 	centerVertical();
@@ -13,6 +15,10 @@ $(document).ready(() => {
 	
 	if(Storage) {
 		signin(localStorage.getItem("uid"), localStorage.getItem("token"));
+		user.media = JSON.parse(localStorage.getItem("media")) || {};
+		
+		toggleVid(true);
+		toggleMic(true);
 	}
 });
 $(window).on("load", () => {
@@ -25,6 +31,7 @@ const windowChange = () => {
 };
 $(window).resize(windowChange);
 $(window).on("orientationchange", windowChange);
+
 
 function showModal(title, body, buttons) {
 	$("#modal .modal-title").html(title);
@@ -110,9 +117,20 @@ function showCreate() {
 	$("#signin_alert").css("visibility", "hidden");
 }
 
-let user = {};
 async function signin(uid, token) {
 	if(uid && token) {
+		if(window.location.pathname.startsWith("/link")) {
+			const { reason } = await request("GET", window.location.pathname, { uid, token });
+			if(reason) {
+				$("#inner").hide();
+				await alertModal("Link Error", "The link is invalid");
+				return;
+			}
+			else {
+				window.location.pathname = "";
+				return;
+			}
+		}
 		const data = await request("GET", "api/account/profile", { uid, token });
 		if(data.success) {
 			if(Storage) {
@@ -199,6 +217,9 @@ async function createAccount() {
 						case 409:
 							$("#signin_alert").text("That email address is already in use");
 							break;
+						case 422:
+							$("#signin_alert").text("Invalid email address");
+							break;
 						case 400:
 							$("#signin_alert").text("Bad Request");
 							break;
@@ -245,7 +266,7 @@ function signout() {
 async function joinSession(sid, password) {
 	const form = document.forms["home_join-form"];
 	
-	sid = sid || form.home_join_sid.value;
+	sid = sid || form.home_join_sid.value.toLowerCase();
 	password = password || form.home_join_pw.value;
 	const save = form.home_join_save.checked;
 	
@@ -292,12 +313,13 @@ async function createSession() {
 	if(name && password) {
 		form.className = "";
 		
-		if(await confirmModal("Create Session", "Are you sure you want to create the session?<br /> - Name: " + name, " - Password: " + password)) {
+		if(await confirmModal("Create Session", "Are you sure you want to create the session?<br /> - Name: " + name + "<br /> - Password: " + password)) {
 			const data = await request("POST", "api/session/create", { name, password, "uid": user.uid, "token": user.token });
 			if(data.success) {
 				const data2 = await request("POST", "api/session/join", { "sid": data.result.sid, password, "uid": user.uid, "token": user.token });
 				if(data2.success) {
-					loadSession(data.result.sid, password);
+					await loadSession(data.result.sid, password);
+					sessionInfo();
 				}
 				else {
 					await alertModal("Error Joining Session", "Unexpected Error: " + data2.reason);
@@ -358,7 +380,7 @@ async function removeSession(sid) {
 }
 async function getSessions() {
 	$("#home_join-table tbody").html("");
-	const data = await request("GET", "api/session/get", { uid: user.uid, token: user.token });
+	const data = await request("GET", "api/session/sessions", { uid: user.uid, token: user.token });
 	if(data.success) {
 		if(data.result.length > 0) {
 			for(const session of data.result) {
@@ -417,13 +439,16 @@ async function getSessions() {
 	}
 }
 
-function loadSession() {
-	$("#inner").hide("fast");
-	$("#page_video").show("fast", async () => {
-		user.session = await connect(user.uid, user.token);
-		if(user.session) {
-			$("#video_session-name").html(user.session.name);
-		}
+async function loadSession() {
+	return new Promise(res => {
+		$("#inner").hide("fast");
+		$("#page_video").show("fast", async () => {
+			user.session = await connect(user);
+			if(user.session) {
+				$("#video_session-name").html(user.session.name);
+			}
+			res();
+		});
 	});
 }
 
@@ -437,12 +462,94 @@ function sessionInfo(session) {
 		<div class="form-group">
 			<label for="modal_sid">Session ID:</label>
 			<input class="form-control" type="text" id="modal_sid" value="${session.sid}" readonly>
-		</div>
+		</div>` + (session.owner === user.uid ? `
 		<div class="form-group">
 			<label for="modal_pw">Session Password:</label>
-			<input class="form-control" type="text" id="modal_pw" value="${session.owner === user.uid ? session.password : "\" placeholder=\"<hidden>"}" readonly>
+			<input class="form-control" type="text" id="modal_pw" value="${session.password}" readonly>
 		</div>
-	`, [{ text: "Close", context: "secondary" }]);
+		<div class="form-group">
+			<label for="modal_link">Session Link:</label>
+			<input class="form-control" type="url" id="modal_pw" value="${window.location.origin + "/link/session/" + session.link}" readonly>
+		</div>
+		` : ""), [{ text: "Close", context: "secondary" }]);
 }
 
-Object.assign(window, { showLogin, showCreate, login, createAccount, account, signout, joinSession, createSession, sessionInfo, leaveSession });
+function mediaSettings() {
+	showModal("Media Settings", `
+		<div class="form-group">
+			<label for="media_vid">Camera:</label>
+			<select class="custom-select" id="media_vid"></select>
+		</div>
+		<div class="form-group">
+			<label for="media_mic">Microphone:</label>
+			<select class="custom-select" id="media_mic"></select>
+		</div>
+	`, [
+		{ text: "Save", context: "primary", onclick: () => {
+			user.media.vid = $("#media_vid").val();
+			user.media.mic = $("#media_mic").val();
+			
+			if(Storage) {
+				localStorage.setItem("media", JSON.stringify(user.media));
+			}
+			
+			changeMediaDevices();
+		} }, { text: "Close", context: "secondary" }
+	]);
+	
+	navigator.mediaDevices.enumerateDevices().then(devices => {
+		for(let i = 0; i < devices.length; i++) {
+			const opt = document.createElement("option");
+			opt.text = devices[i].label;
+			opt.value = devices[i].deviceId;
+			
+			switch(devices[i].kind) {
+				case "videoinput":
+					$("#media_vid").append(opt);
+					break;
+				case "audioinput":
+					$("#media_mic").append(opt);
+					break;
+			}
+		}
+		
+		if(user.media && user.media.vid) {
+			$("#media_vid").val(user.media.vid);
+			$("#media_mic").val(user.media.mic);
+		}
+	});
+}
+
+function toggleVid(update) {
+	user.media.muteVid = !user.media.muteVid;
+	$("#toggleVid").attr("class", "fas fa-fw fa-" + (user.media.muteVid ? "video-slash" : "video"));
+	
+	changeMediaDevices();
+	if(Storage) {
+		localStorage.setItem("media", JSON.stringify(user.media));
+	}
+	
+	if(update) {
+		toggleVid();
+	}
+}
+function toggleMic(update) {
+	user.media.muteMic = !user.media.muteMic;
+	$("#toggleMic").attr("class", "fas fa-fw fa-" + (user.media.muteMic ? "microphone-slash" : "microphone"));
+	
+	changeMediaDevices();
+	if(Storage) {
+		localStorage.setItem("media", JSON.stringify(user.media));
+	}
+	
+	if(update) {
+		toggleMic();
+	}
+}
+
+Object.assign(window, { 
+	showLogin, showCreate,
+	login, createAccount, account, signout,
+	joinSession, createSession, sessionInfo, leaveSession,
+	mediaSettings, toggleVid, toggleMic
+});

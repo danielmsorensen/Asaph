@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js --ignore data/",
     "test": "jest",
-    "pretest": "eslint --ignore-path .gitignore --ext .js,.html --ignore-pattern \"**/*.min.js\" ."
+    "pretest": "eslint --ignore-path .gitignore --ext .js,.html --ignore-pattern \"public/doc/**\" --ignore-pattern \"**/*.min.js\" .",
+	"doc": "jsdoc src -R README.md -d public/doc -r"
   },
   "repository": {
     "type": "git",
@@ -29,6 +30,7 @@
     "eslint": "^6.8.0",
     "eslint-plugin-html": "^6.0.2",
     "jest": "^25.3.0",
+    "jsdoc": "^3.6.4",
     "nodemon": "^2.0.3",
     "supertest": "^4.0.2"
   }

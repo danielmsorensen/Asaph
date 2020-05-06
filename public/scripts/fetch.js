@@ -27,6 +27,8 @@ function createReason(reason) {
 
 async function request(method, url, params) {
 	try {
+		url = window.location.origin + (url.startsWith("/") ? "" : "/") + url;
+		
 		let init, q;
 		switch(method) {
 			case "GET":

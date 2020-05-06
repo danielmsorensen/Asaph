@@ -1,20 +1,22 @@
 /* global io */
 const { SimplePeer } = window;
 
-let socket;
+let socket, local;
 let users = {};
 
-let videos, localStream;
+let videos;
 
-function connect(uid, token) {
+function connect(user) {
 	return new Promise(res => {
+		local = user;
+		
 		socket = io.connect(window.location.origin);
 		
 		socket.on("connect", () => {
 			console.log("Connected");
 			socket.emit("join", {
-				uid,
-				token
+				uid: user.uid,
+				token: user.token
 			});
 		});
 		socket.on("disconnect", reason => {
@@ -26,7 +28,7 @@ function connect(uid, token) {
 		});
 		socket.on("error", err => {
 			disconnect();
-			throw err;
+			console.error(err.message);
 		});
 		
 		socket.on("res", data => {
@@ -45,14 +47,11 @@ function connect(uid, token) {
 		});
 		
 		socket.on("user-connected", data => {
-			console.log("User Connected " + JSON.stringify(data));
 			users[data.socketID] = data.user;
-			users[data.socketID].call = Boolean(data.call);
+			users[data.socketID].call = !!data.call;
 			addUser(data.socketID);
 		});
 		socket.on("user-disconnected", data => {
-			console.log("User Disconnected " + JSON.stringify(data));
-			
 			removeUser(data.socketID);
 		});
 		
@@ -68,49 +67,34 @@ function createVideo(id, tag) {
 	const cont = document.createElement("div");
 	cont.className = "video";
 	
-	const node = document.createElement("video");
-	node.id = id;
-	node.autoplay = true;
+	const video = document.createElement("video");
+	video.id = id;
+	video.autoplay = true;
+	video.playsinline = true;
 	
 	const name = document.createElement("span");
 	name.innerHTML = tag;
-	name.className = "text-monospace text-secondary bg-dark px-3 py-1 rounded-lg";
-	name.style.fontSize = "5vmin";
+	name.className = "text-secondary bg-dark px-3 py-1 rounded-lg";
 	name.style.opacity = 0.5;
 	
-	cont.appendChild(node);
+	cont.appendChild(video);
 	cont.appendChild(name);
 	videos.appendChild(cont);
 	
 	arrangeVideos();
 	
-	return node;
+	return video;
 }
 function join() {
 	users = {};
 	videos = document.getElementById("videos");
 	
-	const node = createVideo(socket.id, "You");
-	node.muted = true;
-	node.style.transform = "scale(-1, 1)";
+	local.video = createVideo(socket.id, local.profile.name + "<small> (you)</small>");
+	local.video.autoplay = true;
+	local.video.muted = true;
+	local.video.style.transform = "scale(-1, 1)";
 	
-	navigator.mediaDevices.getUserMedia({
-		video: true,
-		audio: true
-	}).then(stream => {
-		localStream = stream;
-		
-		if("srcObject" in node) {
-			node.srcObject = stream;
-		}
-		else {
-			node.src = URL.createObjectURL(stream);
-		}
-		
-		for(const socketID in users) {
-			users[socketID].peer.addStream(stream);
-		}
-	});
+	changeMediaDevices(local.media);
 }
 function disconnect() {	
 	if(socket.connected) {
@@ -123,9 +107,8 @@ function disconnect() {
 	
 	videos.innerHTML = "";
 	
-	if(localStream) {
-		localStream.getTracks().forEach(track => track.stop());
-		localStream = null;
+	if(local.stream) {
+		local.stream.getTracks().forEach(track => track.stop());
 	}
 }
 
@@ -153,8 +136,8 @@ function addUser(socketID) {
 		}
 	});
 	
-	if(localStream) {
-		users[socketID].peer.addStream(localStream);
+	if(local.stream) {
+		users[socketID].peer.addStream(local.stream);
 	}
 }
 function removeUser(socketID) {
@@ -171,6 +154,50 @@ function removeUser(socketID) {
 		delete users[socketID];
 	}
 }
+
+function changeMediaDevices() {
+	if(!local) {
+		return;
+	}
+	
+	for(const socketID in users) {
+		if(local.stream) {
+			users[socketID].peer.removeStream(local.stream);
+		}
+	}
+	
+	if(local.stream) {
+		local.stream.getTracks().forEach(track => track.stop());
+	}
+	
+	const setStream = stream => {
+		local.stream = stream;
+		
+		if("srcObject" in local.video) {
+			local.video.srcObject = stream;
+		}
+		else {
+			local.video.src = URL.createObjectURL(stream);
+		}
+		
+		if(stream) {
+			for(const socketID in users) {
+				users[socketID].peer.addStream(stream);
+			}
+		}
+	};
+	
+	if(local.media.muteVid && local.media.muteMic) {
+		setStream(null);
+	}
+	else {
+		navigator.mediaDevices.getUserMedia({
+			video: local.media.muteVid ? false : { deviceId: local.media.vid },
+			audio: local.media.muteMic ? false : { deviceId: local.media.mic }
+		}).then(setStream);
+	}
+}
+
 function arrangeVideos() {
 	if(!videos) {
 		return;
@@ -225,6 +252,8 @@ function arrangeVideos() {
 		v.style.width = v.style.height = s + "px";
 		v.style.top = Math.floor(i / c) * s + vp + "px";
 		v.style.left = i % c * s + hp + "px";
+		
+		v.querySelector("span").style.fontSize = s / 20 + "px";
 	}
 }
 
@@ -246,4 +275,4 @@ function getConfig() {
 	xhr.send(JSON.stringify({"format": "urls"}) );
 }
 
-export { connect, disconnect, getConfig, arrangeVideos };
+export { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices };

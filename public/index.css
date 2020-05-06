@@ -11,7 +11,7 @@ body {
 	margin: 0;
 	padding: 0;
 	
-	background-image: linear-gradient(to bottom left, purple, green);
+	background-image: linear-gradient(rgba(255, 255, 255, 0), rgba(0, 127, 0, 0.5)), linear-gradient(-45deg, rgb(63, 135, 166), rgb(235, 248, 255), rgb(246, 157, 60));
 	background-attachment: fixed;
 }
 
@@ -26,6 +26,8 @@ body {
 	left: 50%; 
 	transform: translate(-50%, -50%);
 	transition: top 0.5s, transform 0.5s;
+	
+	background-color: rgba(255, 255, 255, 0.6);
 }
 #inner.overflow {
 	top: 0;
