@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const io = require("socket.io");
+const http = require("http");
 const https = require("https");
 const path = require("path");
 const asaph = require("./asaph");
@@ -60,7 +61,7 @@ class Server {
 	 * @param {Object} opts - Additional parameters to user when seting up express
 	 * @param {string} [opts.staticDir="public"] - Directory to load static content from
 	 */
-	setupExpress(opts) {
+	setupExpress(opts) {		
 		this.app.use(bodyParser.json());
 		this.app.use(bodyParser.urlencoded({ extended: false }));
 		this.app.use(express.static(opts.staticDir || "public"));
@@ -310,16 +311,11 @@ class Server {
 							else {
 								for(const socketID of clients) {
 									if(socketID !== socket.id) {
-										if(false){//socketID in connections && connections[socketID].user.uid === connections[socket.id].user.uid) {
-											socket.disconnect(true);
-										}
-										else {
-											socket.emit("user-connected", {
-												socketID,
-												user: connections[socketID].user.getProfile(),
-												call: true
-											});
-										}
+										socket.emit("user-connected", {
+											socketID,
+											user: connections[socketID].user.getProfile(),
+											call: true
+										});
 									}
 								}
 							}
@@ -357,11 +353,19 @@ class Server {
 	}
 	
 	/** 
-	 *Opens the HTTPS Server on the specified port
+	 * Opens the HTTPS Server on the specified port
 	 * @param {number} port - Port number to open the server onto
 	 */
 	listen(port) {
 		this.server.listen(port);
+		
+		if(!this.redirectServer) {
+			this.redirectServer = http.createServer((req, res) => res.writeHead(301, {
+				"Location": "https://" + req.headers.host + ":" + port + req.url,
+				"Cache-Control": "no-cache"
+			}).end());
+			this.redirectServer.listen(80);
+		}
 	}
 }
 

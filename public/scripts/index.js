@@ -319,7 +319,7 @@ async function createSession() {
 				const data2 = await request("POST", "api/session/join", { "sid": data.result.sid, password, "uid": user.uid, "token": user.token });
 				if(data2.success) {
 					await loadSession(data.result.sid, password);
-					sessionInfo();
+					//sessionInfo();
 				}
 				else {
 					await alertModal("Error Joining Session", "Unexpected Error: " + data2.reason);

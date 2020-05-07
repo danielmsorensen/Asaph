@@ -244,7 +244,7 @@ class Asaph {
 	 * @see [User.getAccessToken]{@link User.getAccessToken}
 	 */
 	createAccount(email, pw, name) {
-		if(/^(\w|(\w\.\w))+\@(\w|(\w\.\w))+\.(\w|(\w\.\w))+$/.test(email)) {		
+		if(/^(\w|(\w\.\w))+@(\w|(\w\.\w))+\.(\w|(\w\.\w))+$/.test(email)) {		
 			for(const uid in this.d.users) {
 				if(this.d.users[uid].email === email) {
 					return Asaph.createReason(409);
@@ -291,7 +291,7 @@ class Asaph {
 	 * @callback userCallback
 	 * @param {User} user - A [User]{@link User} object
 	 */
-	 
+	
 	/**
 	 * Disables the given access token if it was valid
 	 * @param {string} uid - User ID
