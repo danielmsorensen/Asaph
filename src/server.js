@@ -66,6 +66,21 @@ class Server {
 		this.app.use(bodyParser.urlencoded({ extended: false }));
 		this.app.use(express.static(opts.staticDir || "public"));
 		
+		this.app.get("/api/server/close/:password", (req, res) => {
+			if(req.params.password) {
+				if(req.params.password === "psalm50") {
+					this.close();
+					this.respond(res, asaph.Asaph.createResult("Server Closed"));
+				}
+				else {
+					this.respond(res, asaph.Asaph.createReason(403));
+				}
+			}
+			else {
+				this.respond(res, asaph.Asaph.createReason(400));
+			}
+		});
+		
 		this.app.get("/link/:context/:code", (req, res) => {
 			if(req.query.uid && req.query.token) {
 				if(req.params.context && req.params.code) {
@@ -366,6 +381,17 @@ class Server {
 			}).end());
 			this.redirectServer.listen(80);
 		}
+	}
+	
+	/**
+	 * Closes the server
+	 */
+	close() {
+		this.server.close();
+		if(this.redirectServer) {
+			this.redirectServer.close();
+		}
+		this.socket.close();
 	}
 }
 
