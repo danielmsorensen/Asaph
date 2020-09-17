@@ -296,6 +296,14 @@ class Server {
 					});
 				}
 			};
+			const getSID = id => {
+				if(id && id in connections && connections[id].session) {
+					return connections[id].session.sid;
+				}
+				else {
+					return "";
+				}
+			}
 			
 			connections[socket.id] = {};
 			
@@ -357,11 +365,24 @@ class Server {
 			});
 			
 			socket.on("signal", data => {
-				if(connections[socket.id].session && data && data.to in connections && connections[data.to].session && connections[socket.id].session.sid === connections[data.to].session.sid) {
+				if(getSID(socket.id) && data && getSID(socket.id) === getSID(data.to)) {
 					socket.to(data.to).emit("signal", {
 						from: socket.id,
 						signal: data.signal
 					});
+				}
+			});
+			
+			socket.on("chat", data => {
+				if(getSID(socket.id)) {
+					socket.to(getSID(socket.id)).broadcast.emit("chat", {
+						from: socket.id,
+						chat: data.chat
+					});
+					respond("chat", true, data.chat);
+				}
+				else {
+					respond("chat", false, 403);
 				}
 			});
 		});

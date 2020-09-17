@@ -1,5 +1,5 @@
 import { request } from "./fetch.js";
-import { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices } from "./socket.js";
+import { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices, pushChat, onEvent } from "./socket.js";
 
 let user = {};
 
@@ -12,6 +12,12 @@ $(document).ready(() => {
 	$("#home_join").on("hidden.bs.collapse", centerVertical);
 	$("#home_create").on("shown.bs.collapse", centerVertical);
 	$("#home_create").on("hidden.bs.collapse", centerVertical);
+	
+	$("#modal").on("shown.bs.modal", () => {
+		if(modalCB) {
+			modalCB();
+		}
+	});
 	
 	if(Storage) {
 		signin(localStorage.getItem("uid"), localStorage.getItem("token"));
@@ -32,8 +38,14 @@ const windowChange = () => {
 $(window).resize(windowChange);
 $(window).on("orientationchange", windowChange);
 
-
-function showModal(title, body, buttons) {
+let modalCB = null;
+function showModal(title, body, buttons, big, callback) {
+	if(big) {
+		$("#modal .modal-dialog").addClass("modal-xl");
+	}
+	else {
+		$("#modal .modal-dialog").removeClass("modal-xl");
+	}
 	$("#modal .modal-title").html(title);
 	$("#modal .modal-body").html(body);
 	$("#modal .modal-footer").html("");
@@ -44,6 +56,8 @@ function showModal(title, body, buttons) {
 		);
 	}
 	$("#modal").modal("show");
+	
+	modalCB = callback;
 }
 function alertModal(title, body, context) {
 	return new Promise(res => {
@@ -74,6 +88,12 @@ function confirmModal(title, body, context1, context2) {
 			}
 		]);
 	});
+}
+function modalOpen() {
+	return $("#modal").css("display") !== "none";
+}
+function modalTitle() {
+	return $("#modal .modal-title").html();
 }
 
 function centerVertical() {
@@ -547,9 +567,70 @@ function toggleMic(update) {
 	}
 }
 
+function addChat(header, body, context) {
+	user.session.chats = user.session.chats || [];
+	user.session.chats.push({ header, body, context });
+	showChat(header, body, context);
+}
+function showChat(header, body, context) {
+	if(modalOpen() && modalTitle() === "Chat") {
+		$("#modal .modal-body #chats").append(`
+			<div class="card mb-1 ${context ? "text-white bg-" + context : ""}">
+				${header ? `<div class="card-header">${header}</div>` : ``}
+				<div class="card-body">${body}</div>
+			</div>
+		`);
+	}
+	else {
+		$("#openChat").removeClass("text-dark");
+		$("#openChat").addClass("text-warning");
+	}
+}
+function openChat() {
+	$("#openChat").removeClass("text-warning");
+	$("#openChat").addClass("text-dark");
+	
+	showModal("Chat", `
+		<div id="chats"></div>
+		<form id="chat_form" class="form-inline mt-3">
+			<input type="text" class="form-control" id="chatInput" />
+			<button type="button" class="btn btn-default" onclick="sendChat()">Send</button>
+		</form>
+	`, [
+		{ text: "Close", context: "secondary" }
+	], true, () => {
+		for(let chat of user.session.chats || []) {
+			showChat(chat.header, chat.body, chat.context);
+		}
+	});
+}
+function sendChat() {
+	const inp = document.getElementById("chatInput");
+	if(inp.value) {
+		pushChat(inp.value);
+		inp.value = "";
+	}
+}
+onEvent.addEventListener("res", ({ detail:  data }) => {
+	switch(data.eventName) {
+		case "chat":
+			if(data.success) {
+				addChat(user.profile.name + " (you)", data.result, "secondary");
+			}
+			else {
+				addChat("", "Error sending chat", "danger");
+			}
+			break;
+	}
+});
+onEvent.addEventListener("chat", ({ detail:  data }) => {
+	addChat(data.from, data.chat);
+});
+
 Object.assign(window, { 
 	showLogin, showCreate,
 	login, createAccount, account, signout,
 	joinSession, createSession, sessionInfo, leaveSession,
+	openChat, sendChat,
 	mediaSettings, toggleVid, toggleMic
 });

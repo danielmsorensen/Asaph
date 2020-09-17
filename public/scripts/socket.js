@@ -3,6 +3,7 @@ const { SimplePeer } = window;
 
 let socket, local;
 let users = {};
+const onEvent = new EventTarget();
 
 let videos;
 
@@ -43,6 +44,9 @@ function connect(user) {
 						alert("Error: " + data.reason);
 					}
 					break;
+				case "chat":
+					onEvent.dispatchEvent(new CustomEvent("res", { detail: data }));
+					break;
 			}
 		});
 		
@@ -58,6 +62,15 @@ function connect(user) {
 		socket.on("signal", data => {
 			if(data.from in users) {
 				users[data.from].peer.signal(data.signal);
+			}
+		});
+		
+		socket.on("chat", data => {
+			if(data.from in users) {
+				onEvent.dispatchEvent (new CustomEvent("chat", { detail: {
+					from: users[data.from].name,
+					chat: data.chat
+				} }));
 			}
 		});
 	});
@@ -152,6 +165,12 @@ function removeUser(socketID) {
 		}
 		
 		delete users[socketID];
+	}
+}
+
+function pushChat(chat) {
+	if(chat) {
+		socket.emit("chat", { chat });
 	}
 }
 
@@ -275,4 +294,4 @@ function getConfig() {
 	xhr.send(JSON.stringify({"format": "urls"}) );
 }
 
-export { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices };
+export { connect, disconnect, getConfig, arrangeVideos, changeMediaDevices, pushChat, onEvent };
